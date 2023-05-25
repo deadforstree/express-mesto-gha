@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { routes } = require('./routes');
+
 const { PORT = 3000 } = process.env;
 
 const app = express();
@@ -11,7 +12,7 @@ async function main() {
     useUnifiedTopology: true,
   });
 
-  console.log('Connect to db');
+  // console.log('Connect to db');
 
   app.use((req, res, next) => {
     req.user = {
@@ -24,7 +25,7 @@ async function main() {
 
   await app.listen(PORT);
 
-  console.log(`App listening on port ${PORT}`);
+  // console.log(`App listening on port ${PORT}`);
 }
 
 main();

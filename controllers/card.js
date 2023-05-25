@@ -1,11 +1,15 @@
 const card = require('../models/card');
 
+const INCORRECT_DATA_ERROR_CODE = 400;
+const DATA_NOT_FOUND_ERROR_CODE = 404;
+const DEFAULT_ERROR_CODE = 500;
+
 exports.getCards = async (req, res) => {
   try {
     const cards = await card.find({});
     res.status(200).send(cards);
   } catch (err) {
-    res.status(500).send({ message: 'Произошла ошибка!', ...err });
+    res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
   }
 };
 
@@ -15,13 +19,13 @@ exports.deleteCardById = async (req, res) => {
     if (cardSpec) {
       res.status(200).send(cardSpec);
     } else {
-      res.status(404).send({ message: 'Карточка не найдена' });
+      res.status(DATA_NOT_FOUND_ERROR_CODE).send({ message: 'Карточка не найдена' });
     }
   } catch (err) {
     if (err.name === 'CastError') {
-      res.status(400).send({ message: 'Невалидный id ' });
+      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Невалидный id ' });
     } else {
-      res.status(500).send({ message: 'Произошла ошибка!', ...err });
+      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
     }
   }
 };
@@ -31,16 +35,16 @@ exports.createCard = async (req, res) => {
     const { name, link } = req.body;
     const ownerId = req.user._id;
     if (!name || !link) {
-      res.status(400).send({ message: 'Поля "name" и "link" должны быть заполнены' });
+      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Поля "name" и "link" должны быть заполнены' });
     } else {
       const cardNew = await card.create({ name, link, owner: ownerId });
       res.status(201).send({ data: cardNew });
     }
   } catch (err) {
     if (err.name === 'ValidationError') {
-      res.status(400).send({ message: 'Некорректные данные' });
+      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Некорректные данные' });
     } else {
-      res.status(500).send({ message: 'Произошла ошибка!', ...err });
+      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
     }
   }
 };
@@ -56,13 +60,13 @@ exports.putCardlike = async (req, res) => {
     if (cardLike) {
       res.status(200).send({ data: cardLike });
     } else {
-      res.status(404).send({ message: 'Переданы некорректные данные' });
+      res.status(DATA_NOT_FOUND_ERROR_CODE).send({ message: 'Карточка не найдена' });
     }
   } catch (err) {
     if (err.name === 'CastError') {
-      res.status(400).send({ message: 'Невалидный id ' });
+      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Невалидный id ' });
     } else {
-      res.status(500).send({ message: 'Произошла ошибка!', ...err });
+      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
     }
   }
 };
@@ -78,13 +82,13 @@ exports.deleteCardLike = async (req, res) => {
     if (cardDislike) {
       res.status(200).send({ data: cardDislike });
     } else {
-      res.status(404).send({ message: 'Переданы некорректные данные' });
+      res.status(DATA_NOT_FOUND_ERROR_CODE).send({ message: 'Карточка не найдена' });
     }
   } catch (err) {
     if (err.name === 'CastError') {
-      res.status(400).send({ message: 'Невалидный id ' });
+      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Невалидный id ' });
     } else {
-      res.status(500).send({ message: 'Произошла ошибка!', ...err });
+      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
     }
   }
 };
