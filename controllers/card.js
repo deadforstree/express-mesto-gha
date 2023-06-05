@@ -1,55 +1,51 @@
 const card = require('../models/card');
+const NotFoundError = require('../errors/not-found-err');
+const WrongDataError = require('../errors/wrong-data-err');
+const DeleteCardError = require('../errors/delete-card-err');
 
-const INCORRECT_DATA_ERROR_CODE = 400;
-const DATA_NOT_FOUND_ERROR_CODE = 404;
-const DEFAULT_ERROR_CODE = 500;
-
-exports.getCards = async (req, res) => {
+exports.getCards = async (req, res, next) => {
   try {
     const cards = await card.find({});
     res.status(200).send(cards);
   } catch (err) {
-    res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
+    next(err);
   }
 };
 
-exports.deleteCardById = async (req, res) => {
-  try {
-    const cardSpec = await card.findByIdAndRemove(req.params.cardId);
-    if (cardSpec) {
-      res.status(200).send(cardSpec);
-    } else {
-      res.status(DATA_NOT_FOUND_ERROR_CODE).send({ message: 'Карточка не найдена' });
-    }
-  } catch (err) {
-    if (err.name === 'CastError') {
-      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Невалидный id ' });
-    } else {
-      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
-    }
-  }
+exports.deleteCardById = (req, res, next) => {
+  const ownerId = req.user._id; // идентификатор текущего пользователя
+  card.findById(req.params.cardId)
+    .orFail(() => new NotFoundError('Нет карточки по заданному id'))
+    .then((userCard) => {
+      if (!userCard.owner.equals(ownerId)) {
+        return next(new DeleteCardError('Чужая карточка не может быть удалена'));
+      }
+      return userCard.remove()
+        .then(() => res.status(200).send(userCard));
+    })
+    .catch(next);
 };
 
-exports.createCard = async (req, res) => {
+exports.createCard = async (req, res, next) => {
   try {
     const { name, link } = req.body;
     const ownerId = req.user._id;
     if (!name || !link) {
-      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Поля "name" и "link" должны быть заполнены' });
+      throw new WrongDataError('Поля "name" и "link" должны быть заполнены');
     } else {
       const cardNew = await card.create({ name, link, owner: ownerId });
       res.status(201).send({ data: cardNew });
     }
   } catch (err) {
     if (err.name === 'ValidationError') {
-      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Некорректные данные' });
+      next(new WrongDataError('Некорректные данные'));
     } else {
-      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
+      next(err);
     }
   }
 };
 
-exports.putCardlike = async (req, res) => {
+exports.putCardlike = async (req, res, next) => {
   try {
     const ownerId = req.user._id;
     const cardLike = await card.findByIdAndUpdate(
@@ -60,18 +56,18 @@ exports.putCardlike = async (req, res) => {
     if (cardLike) {
       res.status(200).send({ data: cardLike });
     } else {
-      res.status(DATA_NOT_FOUND_ERROR_CODE).send({ message: 'Карточка не найдена' });
+      throw new NotFoundError('Переданы некорректные данные');
     }
   } catch (err) {
     if (err.name === 'CastError') {
-      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Невалидный id ' });
+      next(new WrongDataError('Невалидный id '));
     } else {
-      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
+      next(err);
     }
   }
 };
 
-exports.deleteCardLike = async (req, res) => {
+exports.deleteCardLike = async (req, res, next) => {
   try {
     const ownerId = req.user._id;
     const cardDislike = await card.findByIdAndUpdate(
@@ -82,13 +78,13 @@ exports.deleteCardLike = async (req, res) => {
     if (cardDislike) {
       res.status(200).send({ data: cardDislike });
     } else {
-      res.status(DATA_NOT_FOUND_ERROR_CODE).send({ message: 'Карточка не найдена' });
+      throw new NotFoundError('Переданы некорректные данные');
     }
   } catch (err) {
     if (err.name === 'CastError') {
-      res.status(INCORRECT_DATA_ERROR_CODE).send({ message: 'Невалидный id ' });
+      next(new WrongDataError('Невалидный id '));
     } else {
-      res.status(DEFAULT_ERROR_CODE).send({ message: 'Произошла ошибка!', ...err });
+      next(err);
     }
   }
 };
