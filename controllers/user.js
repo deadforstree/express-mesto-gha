@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs'); // импортируем bcrypt
 const jwt = require('jsonwebtoken'); // импортируем модуль jsonwebtoken
-const user = require('../models/user');
+const User = require('../models/user');
 const NotFoundError = require('../errors/not-found-err');
 const WrongDataError = require('../errors/wrong-data-err');
 const WrongTokenError = require('../errors/wrong-token-err');
@@ -8,9 +8,11 @@ const ExistingEmailError = require('../errors/existing-email-err');
 
 const saltPassword = 10;
 
+const { NODE_ENV, JWT_SECRET } = process.env;
+
 exports.getUsers = async (req, res, next) => {
   try {
-    const users = await user.find({});
+    const users = await User.find({});
     res.status(200).send(users);
   } catch (err) {
     next(err);
@@ -20,7 +22,7 @@ exports.getUsers = async (req, res, next) => {
 exports.getUserMe = async (req, res, next) => {
   const ownerId = req.user._id;
   try {
-    const userSpec = await user.findById(ownerId);
+    const userSpec = await User.findById(ownerId);
     if (userSpec) {
       res.status(200).send({ data: userSpec });
     } else {
@@ -38,7 +40,7 @@ exports.getUserMe = async (req, res, next) => {
 exports.getUserbyId = async (req, res, next) => {
   const ownerId = req.params.userId;
   try {
-    const userSpec = await user.findById(req.params.userId);
+    const userSpec = await User.findById(req.params.userId);
     if (userSpec) {
       res.status(200).send({ data: userSpec });
     } else {
@@ -59,14 +61,10 @@ exports.createUser = async (req, res, next) => {
   const {
     name, about, avatar, email, password,
   } = req.body;
-  // проверка что введен пароль и логин
-  if (!email || !password) {
-    next(new WrongDataError('Поля "email" и "password" должно быть заполнены'));
-  }
   // хешируем пароль
   bcrypt.hash(password, saltPassword)
     .then((hash) => {
-      user.create({
+      User.create({
         name,
         about,
         avatar,
@@ -85,14 +83,13 @@ exports.createUser = async (req, res, next) => {
         })
         .catch((err) => {
           if (err.name === 'ValidationError') {
-            next(new WrongDataError('Некорректные данные'));
+            return next(new WrongDataError('Некорректные данные'));
           }
           if (err.code === 11000) {
             // ошибка: пользователь пытается зарегистрироваться по уже существующему в базе email
-            next(new ExistingEmailError('Данный email уже существует в базе данных'));
-          } else {
-            next(err);
+            return next(new ExistingEmailError('Данный email уже существует в базе данных'));
           }
+          return next(err);
         });
     })
     .catch(next);
@@ -106,11 +103,11 @@ exports.patchUserMe = async (req, res, next) => {
       throw new WrongDataError('Поля "name" и "about" должно быть заполнены');
     } else {
       const ownerId = req.user._id;
-      const userPatchMe = await user.findByIdAndUpdate(ownerId, { name, about }, opts);
+      const userPatchMe = await User.findByIdAndUpdate(ownerId, { name, about }, opts);
       if (userPatchMe) {
         res.status(200).send({ data: userPatchMe });
       } else {
-        throw new NotFoundError('Переданы некорректные данные');
+        throw new NotFoundError('Пользователь не найден');
       }
     }
   } catch (err) {
@@ -124,18 +121,14 @@ exports.patchUserMe = async (req, res, next) => {
 
 exports.patchUserAvatar = async (req, res, next) => {
   try {
-    if (!req.body.avatar) {
-      throw new WrongDataError('Поле "avatar" должно быть заполнено');
+    const { avatar } = req.body;
+    const ownerId = req.user._id;
+    const opts = { new: true, runValidators: true };
+    const userPatchAvatar = await User.findByIdAndUpdate(ownerId, { avatar }, opts);
+    if (userPatchAvatar) {
+      res.status(200).send({ data: userPatchAvatar });
     } else {
-      const { avatar } = req.body;
-      const ownerId = req.user._id;
-      const opts = { new: true, runValidators: true };
-      const userPatchAvatar = await user.findByIdAndUpdate(ownerId, { avatar }, opts);
-      if (userPatchAvatar) {
-        res.status(200).send({ data: userPatchAvatar });
-      } else {
-        throw new NotFoundError('Переданы некорректные данные');
-      }
+      throw new NotFoundError('Пользователь не найден');
     }
   } catch (err) {
     if (err.name === 'ValidationError') {
@@ -148,17 +141,29 @@ exports.patchUserAvatar = async (req, res, next) => {
 
 // контроллер аутентификации (проверка почты и пароля)
 exports.login = (req, res, next) => {
-  // получаем данные
   const { email, password } = req.body;
-  // ищем пользователя в базе по email-y
-  return user.findUserByCredentials(email, password)
-    .then((existingUser) => {
-      // создадим токен
-      const token = jwt.sign({ _id: existingUser._id }, 'some-secret-key', { expiresIn: '7d' });
-      // вернём токен
-      res.send({ token });
+
+  User.findOne({ email }).select('+password')
+    .then((user) => {
+      if (!user) {
+        return next(new WrongTokenError('Неправильные почта или пароль.'));
+      }
+
+      return bcrypt.compare(password, user.password)
+        .then((matched) => {
+          if (!matched) {
+            return next(new WrongTokenError('Неправильные почта или пароль.'));
+          }
+
+          const token = jwt.sign(
+            { _id: user._id },
+            NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret',
+            { expiresIn: '7d' },
+          );
+
+          return res.send({ token });
+        });
     })
-    .catch(() => {
-      next(new WrongTokenError('Ошибка авторизации: неправильная почта или логин'));
-    });
+
+    .catch(next);
 };

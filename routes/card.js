@@ -22,6 +22,6 @@ cardsRoutes.put('/:cardId/likes', validateCardId, putCardlike);
 
 cardsRoutes.delete('/:cardId/likes', validateCardId, deleteCardLike);
 
-cardsRoutes.post('/', createCardValidation, express.json(), createCard);
+cardsRoutes.post('/', express.json(), createCardValidation, createCard);
 
 exports.cardsRoutes = cardsRoutes;

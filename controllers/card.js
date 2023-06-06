@@ -1,11 +1,15 @@
-const card = require('../models/card');
+const Card = require('../models/card');
 const NotFoundError = require('../errors/not-found-err');
-const WrongDataError = require('../errors/wrong-data-err');
 const DeleteCardError = require('../errors/delete-card-err');
+const {
+  handleError,
+  HTTP_STATUS_OK,
+  HTTP_STATUS_CREATED,
+} = require('../constants/constants');
 
 exports.getCards = async (req, res, next) => {
   try {
-    const cards = await card.find({});
+    const cards = await Card.find({});
     res.status(200).send(cards);
   } catch (err) {
     next(err);
@@ -13,78 +17,55 @@ exports.getCards = async (req, res, next) => {
 };
 
 exports.deleteCardById = (req, res, next) => {
-  const ownerId = req.user._id; // идентификатор текущего пользователя
-  card.findById(req.params.cardId)
-    .orFail(() => new NotFoundError('Нет карточки по заданному id'))
-    .then((userCard) => {
-      if (!userCard.owner.equals(ownerId)) {
-        return next(new DeleteCardError('Чужая карточка не может быть удалена'));
+  const userId = req.user._id;
+
+  Card.findById(req.params.cardId)
+    .orFail()
+    .then((card) => {
+      const ownerId = card.owner.toString();
+      if (ownerId !== userId) {
+        return next(new DeleteCardError('К сожалению вы не автор данной карточки'));
       }
-      return userCard.remove()
-        .then(() => res.status(200).send(userCard));
+      return card;
     })
+    .then((card) => Card.deleteOne(card))
+    .then((card) => res.status(HTTP_STATUS_OK).send(card))
+    .catch((err) => handleError(err, next));
+};
+
+exports.createCard = (req, res, next) => {
+  const { name, link } = req.body;
+
+  Card.create({ name, link, owner: req.user._id })
+    .then((card) => res.status(HTTP_STATUS_CREATED).send(card))
     .catch(next);
 };
 
-exports.createCard = async (req, res, next) => {
-  try {
-    const { name, link } = req.body;
-    const ownerId = req.user._id;
-    if (!name || !link) {
-      throw new WrongDataError('Поля "name" и "link" должны быть заполнены');
-    } else {
-      const cardNew = await card.create({ name, link, owner: ownerId });
-      res.status(201).send({ data: cardNew });
-    }
-  } catch (err) {
-    if (err.name === 'ValidationError') {
-      next(new WrongDataError('Некорректные данные'));
-    } else {
-      next(err);
-    }
-  }
+exports.putCardlike = (req, res, next) => {
+  Card.findByIdAndUpdate(
+    req.params.cardId,
+    { $addToSet: { likes: req.user._id } },
+    { new: true },
+  )
+    .then((card) => {
+      if (!card) {
+        return next(new NotFoundError('Неправильный id'));
+      } return res.status(HTTP_STATUS_OK).send(card);
+    })
+    .catch((err) => handleError(err, next));
 };
 
-exports.putCardlike = async (req, res, next) => {
-  try {
-    const ownerId = req.user._id;
-    const cardLike = await card.findByIdAndUpdate(
-      req.params.cardId,
-      { $addToSet: { likes: ownerId } },
-      { new: true },
-    );
-    if (cardLike) {
-      res.status(200).send({ data: cardLike });
-    } else {
-      throw new NotFoundError('Переданы некорректные данные');
-    }
-  } catch (err) {
-    if (err.name === 'CastError') {
-      next(new WrongDataError('Невалидный id '));
-    } else {
-      next(err);
-    }
-  }
-};
-
-exports.deleteCardLike = async (req, res, next) => {
-  try {
-    const ownerId = req.user._id;
-    const cardDislike = await card.findByIdAndUpdate(
-      req.params.cardId,
-      { $pull: { likes: ownerId } },
-      { new: true },
-    );
-    if (cardDislike) {
-      res.status(200).send({ data: cardDislike });
-    } else {
-      throw new NotFoundError('Переданы некорректные данные');
-    }
-  } catch (err) {
-    if (err.name === 'CastError') {
-      next(new WrongDataError('Невалидный id '));
-    } else {
-      next(err);
-    }
-  }
+exports.deleteCardLike = (req, res, next) => {
+  Card.findByIdAndUpdate(
+    req.params.cardId,
+    { $pull: { likes: req.user._id } },
+    { new: true },
+  )
+    .orFail()
+    .then((card) => {
+      if (!card) {
+        return next(new NotFoundError('Неправильный id'));
+      } return res.status(HTTP_STATUS_OK).send(card);
+    })
+    .catch((err) => handleError(err, next));
 };

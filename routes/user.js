@@ -18,10 +18,10 @@ userRoutes.get('/', getUsers);
 
 userRoutes.get('/me', getUserMe);
 
-userRoutes.patch('/me', patchUserMeValidation, express.json(), patchUserMe);
+userRoutes.patch('/me', express.json(), patchUserMeValidation, patchUserMe);
 
 userRoutes.get('/:userId', userIdValidation, getUserbyId);
 
-userRoutes.patch('/me/avatar', patchUserAvatarValidation, express.json(), patchUserAvatar);
+userRoutes.patch('/me/avatar', express.json(), patchUserAvatarValidation, patchUserAvatar);
 
 exports.userRoutes = userRoutes;
