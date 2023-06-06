@@ -8,12 +8,9 @@ const {
 } = require('../constants/constants');
 
 exports.getCards = async (req, res, next) => {
-  try {
-    const cards = await Card.find({});
-    res.status(200).send(cards);
-  } catch (err) {
-    next(err);
-  }
+  Card.find({})
+    .then((cards) => res.status(HTTP_STATUS_OK).send(cards))
+    .catch(next);
 };
 
 exports.deleteCardById = (req, res, next) => {

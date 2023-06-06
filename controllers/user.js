@@ -2,141 +2,99 @@ const bcrypt = require('bcryptjs'); // импортируем bcrypt
 const jwt = require('jsonwebtoken'); // импортируем модуль jsonwebtoken
 const User = require('../models/user');
 const NotFoundError = require('../errors/not-found-err');
-const WrongDataError = require('../errors/wrong-data-err');
 const WrongTokenError = require('../errors/wrong-token-err');
 const ExistingEmailError = require('../errors/existing-email-err');
 
-const saltPassword = 10;
-
 const { NODE_ENV, JWT_SECRET } = process.env;
 
+const {
+  handleError,
+  HTTP_STATUS_OK,
+  HTTP_STATUS_CREATED,
+} = require('../constants/constants');
+
 exports.getUsers = async (req, res, next) => {
-  try {
-    const users = await User.find({});
-    res.status(200).send(users);
-  } catch (err) {
-    next(err);
-  }
+  User.find({})
+    .then((users) => res.send(users))
+    .catch(next);
 };
 
 exports.getUserMe = async (req, res, next) => {
-  const ownerId = req.user._id;
-  try {
-    const userSpec = await User.findById(ownerId);
-    if (userSpec) {
-      res.status(200).send({ data: userSpec });
-    } else {
-      throw new NotFoundError(`Пользователь по указанному ${ownerId} не найден`);
-    }
-  } catch (err) {
-    if (err.name === 'CastError') {
-      next(new WrongDataError(`Невалидный id ${ownerId}`));
-    } else {
-      next(err);
-    }
-  }
+  User.findById(req.user._id)
+    .then((user) => {
+      if (!user) {
+        next(new NotFoundError('Пользователь по указанному id не найден'));
+      }
+      res.status(HTTP_STATUS_OK)
+        .send(user);
+    })
+    .catch((err) => handleError(err, next));
 };
 
 exports.getUserbyId = async (req, res, next) => {
-  const ownerId = req.params.userId;
-  try {
-    const userSpec = await User.findById(req.params.userId);
-    if (userSpec) {
-      res.status(200).send({ data: userSpec });
-    } else {
-      throw new NotFoundError(`Пользователь по указанному ${ownerId} не найден`);
-    }
-  } catch (err) {
-    if (err.name === 'CastError') {
-      next(new WrongDataError(`Невалидный id ${ownerId}`));
-    } else {
-      next(err);
-    }
-  }
+  const { userId } = req.params;
+  User.findById(userId)
+    .then((user) => {
+      if (!user) {
+        return next(new NotFoundError('Пользователь по указанному id не найден'));
+      } return res.send(user);
+    })
+    .catch((err) => handleError(err, next));
 };
 
 // создание пользователя
 exports.createUser = async (req, res, next) => {
-  // получаем данные
   const {
     name, about, avatar, email, password,
   } = req.body;
-  // хешируем пароль
-  bcrypt.hash(password, saltPassword)
+
+  bcrypt.hash(password, 10)
     .then((hash) => {
       User.create({
-        name,
-        about,
-        avatar,
-        email,
-        password: hash, // записываем хеш в базу
+        name, about, avatar, email, password: hash,
       })
-        .then(() => {
-          res.status(200).send({
-            data: {
-              name,
-              about,
-              avatar,
-              email,
-            },
-          });
+        .then((user) => {
+          const noPassword = user.toObject({ useProjection: true });
+          res.status(HTTP_STATUS_CREATED).send(noPassword);
         })
         .catch((err) => {
-          if (err.name === 'ValidationError') {
-            return next(new WrongDataError('Некорректные данные'));
-          }
           if (err.code === 11000) {
-            // ошибка: пользователь пытается зарегистрироваться по уже существующему в базе email
-            return next(new ExistingEmailError('Данный email уже существует в базе данных'));
+            return next(new ExistingEmailError('Пользователь с указанным e-mail уже существует'));
           }
-          return next(err);
+          return handleError(err, next);
         });
     })
     .catch(next);
 };
 
 exports.patchUserMe = async (req, res, next) => {
-  try {
-    const { name, about } = req.body;
-    const opts = { new: true, runValidators: true };
-    if (!name || !about) {
-      throw new WrongDataError('Поля "name" и "about" должно быть заполнены');
-    } else {
-      const ownerId = req.user._id;
-      const userPatchMe = await User.findByIdAndUpdate(ownerId, { name, about }, opts);
-      if (userPatchMe) {
-        res.status(200).send({ data: userPatchMe });
-      } else {
-        throw new NotFoundError('Пользователь не найден');
+  const { name, about } = req.body;
+
+  User.findByIdAndUpdate(
+    req.user._id,
+    { name, about },
+    { new: true, runValidators: true },
+  )
+    .then((user) => {
+      if (!user) {
+        next(new NotFoundError('Пользователь не найден'));
       }
-    }
-  } catch (err) {
-    if (err.name === 'ValidationError') {
-      next(new WrongDataError('Некорректные данные'));
-    } else {
-      next(err);
-    }
-  }
+      res.status(HTTP_STATUS_OK).send({ data: user });
+    })
+    .catch((err) => handleError(err, next));
 };
 
 exports.patchUserAvatar = async (req, res, next) => {
-  try {
-    const { avatar } = req.body;
-    const ownerId = req.user._id;
-    const opts = { new: true, runValidators: true };
-    const userPatchAvatar = await User.findByIdAndUpdate(ownerId, { avatar }, opts);
-    if (userPatchAvatar) {
-      res.status(200).send({ data: userPatchAvatar });
-    } else {
-      throw new NotFoundError('Пользователь не найден');
-    }
-  } catch (err) {
-    if (err.name === 'ValidationError') {
-      next(new WrongDataError('Некорректные данные'));
-    } else {
-      next(err);
-    }
-  }
+  const { avatar } = req.body;
+
+  User.findByIdAndUpdate(req.user._id, { avatar }, { new: true, runValidators: true })
+    .then((user) => {
+      if (!user) {
+        next(new NotFoundError('Пользователь не найден'));
+      }
+      res.status(HTTP_STATUS_OK).send({ avatar });
+    })
+    .catch((err) => handleError(err, next));
 };
 
 // контроллер аутентификации (проверка почты и пароля)
