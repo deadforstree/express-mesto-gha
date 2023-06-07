@@ -45,7 +45,7 @@ exports.patchUserMeValidation = celebrate({
       .messages({
         'string.min': 'Минимальная длина поля "name" - 2',
         'string.max': 'Максимальная длина поля "name" - 30',
-        'any.required': 'Поле "password" должно быть заполнено',
+        'any.required': 'Поле "name" должно быть заполнено',
       }),
     about: Joi.string().required().min(2).max(30)
       .messages({

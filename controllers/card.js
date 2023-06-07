@@ -35,7 +35,7 @@ exports.createCard = (req, res, next) => {
 
   Card.create({ name, link, owner: req.user._id })
     .then((card) => res.status(HTTP_STATUS_CREATED).send(card))
-    .catch(next);
+    .catch((err) => handleError(err, next));
 };
 
 exports.putCardlike = (req, res, next) => {

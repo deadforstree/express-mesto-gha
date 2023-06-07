@@ -1,3 +1,4 @@
+/* eslint-disable consistent-return */
 require('dotenv').config();
 const bcrypt = require('bcryptjs'); // импортируем bcrypt
 const jwt = require('jsonwebtoken'); // импортируем модуль jsonwebtoken
@@ -24,7 +25,7 @@ exports.getUserMe = async (req, res, next) => {
   User.findById(req.user._id)
     .then((user) => {
       if (!user) {
-        next(new NotFoundError('Пользователь по указанному id не найден'));
+        return next(new NotFoundError('Пользователь по указанному id не найден'));
       }
       res.status(HTTP_STATUS_OK)
         .send(user);
@@ -78,7 +79,7 @@ exports.patchUserMe = async (req, res, next) => {
   )
     .then((user) => {
       if (!user) {
-        next(new NotFoundError('Пользователь не найден'));
+        return next(new NotFoundError('Пользователь не найден'));
       }
       res.status(HTTP_STATUS_OK).send({ data: user });
     })
@@ -91,7 +92,7 @@ exports.patchUserAvatar = async (req, res, next) => {
   User.findByIdAndUpdate(req.user._id, { avatar }, { new: true, runValidators: true })
     .then((user) => {
       if (!user) {
-        next(new NotFoundError('Пользователь не найден'));
+        return next(new NotFoundError('Пользователь не найден'));
       }
       res.status(HTTP_STATUS_OK).send({ avatar });
     })
